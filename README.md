@@ -4,6 +4,7 @@
 
 这是一款VSCode插件
 一键将当前分支合并到目标分支并推送，避免频繁切换分支的插件。
+同步发布到open-vsx.org, cursor的应用商店也可以搜到了
 
 另外还有一款类似的插件,用于支持jetbranins产品插件链接: https://github.com/ApexGust/git-merge-target
 
