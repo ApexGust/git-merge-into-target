@@ -1,0 +1,15 @@
+.vscode/
+.gitignore
+.git/
+src/
+tsconfig.json
+node_modules/
+*.vsix
+images/
+.DS_Store
+*.log
+.nyc_output
+coverage/
+**/.nyc_output
+**/coverage
+**/.DS_Store 
