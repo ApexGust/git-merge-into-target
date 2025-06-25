@@ -25,7 +25,7 @@
   ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "onCommand:git-merge-into-target.quickMerge"
+    "onCommand:gitMergeIntoTarget.mergeToTarget"
   ],
   "contributes": {
     "commands": [
