@@ -9,6 +9,9 @@
 另外还有一款类似的插件,用于支持jetbranins产品插件链接: https://github.com/ApexGust/git-merge-target
 
 
+## ChangeLog
+- 2025.07.01 支持vscode/cursor 工作区 管理多个项目
+
 ## ✨ 功能特性
 
 - 🚀 **一键合并**: 选择目标分支即可自动执行完整的合并流程
