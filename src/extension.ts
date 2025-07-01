@@ -1,10 +1,53 @@
 import * as vscode from 'vscode';
 import { simpleGit, SimpleGit } from 'simple-git';
 
-let git: SimpleGit;
+// 移除全局git实例
+// let git: SimpleGit;
 
 // 添加输出通道用于日志
 const outputChannel = vscode.window.createOutputChannel('Git快速合并');
+
+/**
+ * 获取当前活动工作区的Git实例
+ */
+function getCurrentWorkspaceGit(): SimpleGit | null {
+    // 获取当前活动的文本编辑器
+    const activeEditor = vscode.window.activeTextEditor;
+    if (!activeEditor) {
+        return null;
+    }
+
+    // 获取当前文件所在的工作区
+    const currentFileUri = activeEditor.document.uri;
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(currentFileUri);
+    
+    if (!workspaceFolder) {
+        return null;
+    }
+
+    // 为当前工作区创建Git实例
+    return simpleGit(workspaceFolder.uri.fsPath);
+}
+
+/**
+ * 获取当前工作区信息
+ */
+function getCurrentWorkspaceInfo(): { git: SimpleGit; workspacePath: string; workspaceName: string } | null {
+    const git = getCurrentWorkspaceGit();
+    if (!git) {
+        return null;
+    }
+
+    const activeEditor = vscode.window.activeTextEditor;
+    const currentFileUri = activeEditor!.document.uri;
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(currentFileUri)!;
+
+    return {
+        git,
+        workspacePath: workspaceFolder.uri.fsPath,
+        workspaceName: workspaceFolder.name
+    };
+}
 
 /**
  * 记录日志到输出通道和控制台
@@ -74,11 +117,11 @@ ${conflictFiles.length > 0 ? conflictFiles.map(file => `- ${file}`).join('\n') :
 export function activate(context: vscode.ExtensionContext) {
     log('Git快速合并插件已激活');
     
-    // 初始化git实例
-    if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-        const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
-        git = simpleGit(workspaceRoot);
-    }
+    // 移除全局git初始化
+    // if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+    //     const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    //     git = simpleGit(workspaceRoot);
+    // }
 
     // 注册命令：合并到目标分支
     const mergeCommand = vscode.commands.registerCommand('gitMergeIntoTarget.mergeToTarget', async () => {
@@ -88,14 +131,24 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(mergeCommand);
 }
 
-
-
 /**
  * 主要的合并功能
  */
 async function mergeToTargetBranch() {
-    if (!git) {
-        vscode.window.showErrorMessage('未找到Git仓库');
+    // 获取当前工作区信息
+    const workspaceInfo = getCurrentWorkspaceInfo();
+    if (!workspaceInfo) {
+        vscode.window.showErrorMessage('无法获取当前工作区的Git信息，请确保当前文件在Git仓库中');
+        return;
+    }
+
+    const { git, workspacePath, workspaceName } = workspaceInfo;
+    
+    // 验证是否为Git仓库
+    try {
+        await git.status();
+    } catch (error) {
+        vscode.window.showErrorMessage(`当前工作区 "${workspaceName}" 不是Git仓库`);
         return;
     }
 
@@ -104,7 +157,7 @@ async function mergeToTargetBranch() {
         const status = await git.status();
         if (status.files.length > 0) {
             const answer = await vscode.window.showWarningMessage(
-                '工作区有未提交的更改，是否继续？',
+                `工作区 "${workspaceName}" 有未提交的更改，是否继续？`,
                 '继续',
                 '取消'
             );
@@ -140,15 +193,15 @@ async function mergeToTargetBranch() {
             // 按字母顺序排序分支
             const sortedBranches = uniqueBranches.sort((a, b) => a.localeCompare(b));
 
-            // 创建简洁的分支选项
+            // 创建简洁的分支选项，包含工作区信息
             const branchItems = sortedBranches.map(branch => ({
                 label: `$(git-branch) ${branch}`,
-                description: `将 "${currentBranch}" 合并到 "${branch}"`,
+                description: `[${workspaceName}] 将 "${currentBranch}" 合并到 "${branch}"`,
                 branch: branch
             }));
 
             const selected = await vscode.window.showQuickPick(branchItems, {
-                title: "Git 快速合并 - 自动执行: checkout → pull → merge → push → checkout回来",
+                title: `Git 快速合并 - ${workspaceName}`,
                 placeHolder: `选择目标分支即可开始合并 (当前分支: ${currentBranch})`,
                 matchOnDescription: true
             });
@@ -159,7 +212,6 @@ async function mergeToTargetBranch() {
 
             targetBranch = selected.branch;
 
-
         } catch (error) {
             vscode.window.showErrorMessage(`获取分支列表失败: ${error}`);
             return;
@@ -168,7 +220,7 @@ async function mergeToTargetBranch() {
         // 显示进度条
         let mergeResult = await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
-            title: "正在执行Git合并操作...",
+            title: `正在执行Git合并操作... (${workspaceName})`,
             cancellable: false
         }, async (progress) => {
             // 在这里明确类型，确保 targetBranch 是字符串
@@ -296,7 +348,7 @@ async function mergeToTargetBranch() {
                 }
 
                 vscode.window.showInformationMessage(
-                    `✅ 成功将 "${currentBranch}" 合并到 "${target}" 并推送到远程！`
+                    `✅ 成功将 "${currentBranch}" 合并到 "${target}" 并推送到远程！ (${workspaceName})`
                 );
 
                 // 返回成功标识

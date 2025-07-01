@@ -2,7 +2,7 @@
   "name": "git-merge-into-target",
   "displayName": "Git快速合并",
   "description": "一键将当前分支合并到目标分支并推送，避免频繁切换分支",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "icon": "icon.png",
   "publisher": "prayfff",
   "repository": {
