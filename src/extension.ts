@@ -177,9 +177,9 @@ async function mergeToTargetBranch() {
         let targetBranch: string | undefined;
         
         try {
-            // 获取所有分支
-            const branches = await git.branch(['-a']);
-            const branchList = branches.all.map(branch => branch.replace('remotes/origin/', ''));
+            // 获取所有本地分支
+            const branches = await git.branchLocal();
+            const branchList = branches.all;
             
             // 去重并过滤当前分支和HEAD
             const uniqueBranches = [...new Set(branchList)]
