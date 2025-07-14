@@ -24,7 +24,7 @@
     "vscode": "^1.60.0"
   },
   "categories": [
-    "Git"
+    "Other"
   ],
   "main": "./out/extension.js",
   "activationEvents": [
@@ -36,12 +36,12 @@
       {
         "command": "gitMergeIntoTarget.mergeToTarget",
         "title": "Git: 快速合并到分支",
-        "category": "Git"
+        "category": "Other"
       },
       {
         "command": "gitMergeIntoTarget.updateAllBranches",
         "title": "Git: 一键更新所有本地分支",
-        "category": "Git"
+        "category": "Other"
       }
     ],
     "menus": {
