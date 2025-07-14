@@ -1,8 +1,8 @@
 {
   "name": "git-merge-into-target",
   "displayName": "Git快速合并",
-  "description": "一键将当前分支合并到目标分支并推送，避免频繁切换分支",
-  "version": "1.0.2",
+  "description": "一键将当前分支合并到目标分支并推送; 支持一键批量更新所有本地分支，自动跳过失败分支，合并与分支管理更高效。",
+  "version": "1.0.3",
   "icon": "icon.png",
   "publisher": "prayfff",
   "repository": {
@@ -15,17 +15,21 @@
     "branch",
     "快速合并",
     "version control",
-    "workflow"
+    "workflow",
+    "update",
+    "pull",
+    "批量更新"
   ],
   "engines": {
     "vscode": "^1.60.0"
   },
   "categories": [
-    "Other"
+    "Git"
   ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "onCommand:gitMergeIntoTarget.mergeToTarget"
+    "onCommand:gitMergeIntoTarget.mergeToTarget",
+    "onCommand:gitMergeIntoTarget.updateAllBranches"
   ],
   "contributes": {
     "commands": [
@@ -33,12 +37,21 @@
         "command": "gitMergeIntoTarget.mergeToTarget",
         "title": "Git: 快速合并到分支",
         "category": "Git"
+      },
+      {
+        "command": "gitMergeIntoTarget.updateAllBranches",
+        "title": "Git: 一键更新所有本地分支",
+        "category": "Git"
       }
     ],
     "menus": {
       "commandPalette": [
         {
           "command": "gitMergeIntoTarget.mergeToTarget",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "gitMergeIntoTarget.updateAllBranches",
           "when": "workspaceFolderCount > 0"
         }
       ]

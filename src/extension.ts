@@ -121,6 +121,12 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     context.subscriptions.push(mergeCommand);
+
+    // 注册命令：一键更新所有本地分支
+    const updateAllBranchesCommand = vscode.commands.registerCommand('gitMergeIntoTarget.updateAllBranches', async () => {
+        await updateAllBranches();
+    });
+    context.subscriptions.push(updateAllBranchesCommand);
 }
 
 /**
@@ -435,6 +441,64 @@ async function mergeToTargetBranch() {
                 vscode.window.showWarningMessage(`恢复暂存失败: ${stashError.message}`);
             }
         }
+    }
+}
+
+/**
+ * 一键更新本地所有分支
+ */
+async function updateAllBranches() {
+    const workspaceInfo = getCurrentWorkspaceInfo();
+    if (!workspaceInfo) {
+        vscode.window.showErrorMessage('无法获取当前工作区的Git信息，请确保当前文件在Git仓库中');
+        return;
+    }
+    const { git, workspaceName } = workspaceInfo;
+    let currentBranch = '';
+    const failedBranches: string[] = [];
+    try {
+        // 获取所有本地分支
+        const branches = await git.branchLocal();
+        const branchList = branches.all.filter(b => !b.includes('HEAD'));
+        if (branchList.length === 0) {
+            vscode.window.showWarningMessage('没有本地分支可更新');
+            return;
+        }
+        // 记录当前分支
+        currentBranch = branches.current;
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: `正在更新所有本地分支... (${workspaceName})`,
+            cancellable: false
+        }, async (progress) => {
+            let done = 0;
+            for (const branch of branchList) {
+                progress.report({ increment: (100 / branchList.length), message: `切换并拉取 ${branch}...` });
+                try {
+                    await git.checkout(branch);
+                    await git.pull();
+                } catch (err: any) {
+                    log(`分支 ${branch} 更新失败: ${err.message}`, 'warn');
+                    failedBranches.push(branch);
+                }
+                done++;
+            }
+        });
+    } catch (err: any) {
+        vscode.window.showErrorMessage(`更新分支时发生错误: ${err.message}`);
+        return;
+    } finally {
+        // 切回原分支
+        if (currentBranch) {
+            try {
+                await git.checkout(currentBranch);
+            } catch {}
+        }
+    }
+    // 汇总结果
+    if (failedBranches.length > 0) {
+        const msg = `以下分支更新失败：\n${failedBranches.join(', ')}`;
+        vscode.window.showInformationMessage(msg, { modal: true });
     }
 }
 
