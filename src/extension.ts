@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { simpleGit, SimpleGit } from 'simple-git';
 
 // 移除全局git实例
-// let git: SimpleGit;
+// let git;
 
 // 添加输出通道用于日志
 const outputChannel = vscode.window.createOutputChannel('Git快速合并');
@@ -100,15 +100,7 @@ async function handleMergeConflict(
         }
     } else if (selection === "详细信息") {
         log('用户查看冲突详细信息');
-        const detailModalContent = `\n## 冲突文件列表:
-${conflictFiles.length > 0 ? conflictFiles.map(file => `- ${file}`).join('\n') : '• 请查看VSCode资源管理器中的红色标记文件'}
-
-## 解决方案:
-1. 手动解决冲突:
-   - 编辑冲突文件解决冲突后手动commit
-
-2. 放弃合并:
-   - \`git merge --abort\``;
+        const detailModalContent = `\n## 冲突文件列表:\n${conflictFiles.length > 0 ? conflictFiles.map(file => `- ${file}`).join('\n') : '• 请查看VSCode资源管理器中的红色标记文件'}\n\n## 解决方案:\n1. 手动解决冲突:\n   - 编辑冲突文件解决冲突后手动commit\n\n2. 放弃合并: \n   - \`git merge --abort\``;
             vscode.window.showInformationMessage("Git 合并冲突详细信息", { modal: true, detail: detailModalContent });
         }
     });
@@ -152,16 +144,24 @@ async function mergeToTargetBranch() {
         return;
     }
 
+    let stashed = false;
     try {
         // 检查工作区状态
         const status = await git.status();
-        if (status.files.length > 0) {
+        // 只在有已追踪文件更改时弹窗，untracked 文件不弹窗
+        const hasTrackedChanges = status.staged.length > 0 || status.modified.length > 0 || status.conflicted.length > 0;
+        if (hasTrackedChanges) {
             const answer = await vscode.window.showWarningMessage(
-                `工作区 "${workspaceName}" 有未提交的更改，是否继续？`,
-                '继续',
-                '取消'
+                `工作区 "${workspaceName}" 有未提交的更改。`,
+                { modal: true },
+                '立即暂存',
+                '继续合并'
             );
-            if (answer !== '继续') {
+            if (answer === '立即暂存') {
+                await git.stash();
+                stashed = true;
+                vscode.window.showInformationMessage('更改已暂存');
+            } else if (answer !== '继续合并') {
                 return;
             }
         }
@@ -171,6 +171,26 @@ async function mergeToTargetBranch() {
         if (!currentBranch) {
             vscode.window.showErrorMessage('无法获取当前分支');
             return;
+        }
+
+        // 获取并选择远程仓库
+        const remotes = await git.getRemotes(true);
+        let remoteName: string;
+
+        if (remotes.length === 0) {
+            vscode.window.showErrorMessage('没有找到远程仓库');
+            return;
+        } else if (remotes.length === 1) {
+            remoteName = remotes[0].name;
+        } else {
+            const selectedRemote = await vscode.window.showQuickPick(
+                remotes.map(r => ({ label: r.name, description: r.refs.fetch })),
+                { title: '选择远程仓库' }
+            );
+            if (!selectedRemote) {
+                return; // 用户取消选择
+            }
+            remoteName = selectedRemote.label;
         }
 
         // 直接选择目标分支
@@ -237,7 +257,7 @@ async function mergeToTargetBranch() {
                 // 步骤2: 拉取远程更新
                 progress.report({ increment: 20, message: '拉取远程更新...' });
                 try {
-                    await git.pull('origin', target);
+                    await git.pull(remoteName, target);
                 } catch (pullError: any) {
                     // 检查是否是上游分支未设置的错误
                     if (pullError.message?.includes('no tracking information') || 
@@ -245,7 +265,7 @@ async function mergeToTargetBranch() {
                         
                         // 尝试设置上游分支并重新拉取
                         const answer = await vscode.window.showWarningMessage(
-                            `分支 "${target}" 没有设置上游分支。是否设置上游分支为 origin/${target} 并继续？`,
+                            `分支 "${target}" 没有设置上游分支。是否设置上游分支为 ${remoteName}/${target} 并继续？`,
                             '设置并继续',
                             '跳过拉取',
                             '取消操作'
@@ -253,9 +273,9 @@ async function mergeToTargetBranch() {
                         
                         if (answer === '设置并继续') {
                             try {
-                                await git.push(['--set-upstream', 'origin', target]);
-                                await git.pull('origin', target);
-                                vscode.window.showInformationMessage(`已设置上游分支 origin/${target}`);
+                                await git.push(['--set-upstream', remoteName, target]);
+                                await git.pull(remoteName, target);
+                                vscode.window.showInformationMessage(`已设置上游分支 ${remoteName}/${target}`);
                             } catch (upstreamError: any) {
                                 vscode.window.showWarningMessage(`设置上游分支失败，跳过拉取步骤: ${upstreamError.message}`);
                             }
@@ -264,7 +284,8 @@ async function mergeToTargetBranch() {
                         } else {
                             throw new Error('用户取消了操作');
                         }
-                    } else {
+                    }
+                     else {
                         throw new Error(`拉取远程更新失败: ${pullError.message}`);
                     }
                 }
@@ -321,7 +342,8 @@ async function mergeToTargetBranch() {
                             
                             return { success: false, conflict: true };
                         }
-                    } catch (statusError) {
+                    }
+                     catch (statusError) {
                         log('检查Git状态失败: ' + statusError, 'error');
                     }
                 }
@@ -334,7 +356,7 @@ async function mergeToTargetBranch() {
                 // 步骤4: 推送到远程
                 progress.report({ increment: 20, message: '推送到远程仓库...' });
                 try {
-                    await git.push('origin', target);
+                    await git.push(remoteName, target);
                 } catch (pushError: any) {
                     throw new Error(`推送到远程失败: ${pushError.message}`);
                 }
@@ -369,7 +391,8 @@ async function mergeToTargetBranch() {
                             vscode.window.showWarningMessage(`自动切回原分支失败，请手动执行: git checkout ${currentBranch}`);
                         }
                     }
-                } catch (statusError) {
+                }
+                 catch (statusError) {
                     log('检查分支状态失败: ' + statusError, 'error');
                 }
 
@@ -403,10 +426,19 @@ async function mergeToTargetBranch() {
     } catch (error: any) {
         vscode.window.showErrorMessage(`操作失败: ${error.message || error}`);
         log('Git operation error: ' + error.message, 'error');
+    } finally {
+        if (stashed) {
+            try {
+                await git.stash(['pop']);
+                vscode.window.showInformationMessage('已恢复之前暂存的更改');
+            } catch (stashError: any) {
+                vscode.window.showWarningMessage(`恢复暂存失败: ${stashError.message}`);
+            }
+        }
     }
 }
 
 export function deactivate() {
     log('Git快速合并插件已停用');
     outputChannel.dispose();
-} 
+}

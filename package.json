@@ -46,6 +46,7 @@
   },
   "scripts": {
     "compile": "tsc -p ./",
+    "package": "npx vsce package",
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
